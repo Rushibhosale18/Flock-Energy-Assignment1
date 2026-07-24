@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Urja API Hub - Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --primary-accent: #00f2fe;
+            --secondary-accent: #4facfe;
+            --card-bg: rgba(20, 27, 45, 0.6);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg-color); color: var(--text-main); line-height: 1.6; }
+        .navbar { display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 3rem; background: var(--card-bg); border-bottom: 1px solid var(--card-border); backdrop-filter: blur(10px); }
+        .logo-text { font-size: 1.5rem; font-weight: 800; background: linear-gradient(135deg, var(--secondary-accent), var(--primary-accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .nav-links a { color: var(--text-muted); text-decoration: none; margin-left: 2rem; font-weight: 600; transition: color 0.2s; }
+        .nav-links a:hover { color: var(--primary-accent); }
+        
+        .container { max-width: 1200px; margin: 0 auto; padding: 3rem 2rem; }
+        .header-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+        
+        /* Toggle Switch */
+        .toggle-wrapper { display: flex; align-items: center; gap: 1rem; }
+        .toggle-label { font-weight: 600; color: var(--text-muted); }
+        .switch { position: relative; display: inline-block; width: 50px; height: 26px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255,255,255,0.1); transition: .4s; border-radius: 34px; border: 1px solid var(--card-border); }
+        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: var(--text-muted); transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background: linear-gradient(135deg, var(--secondary-accent), var(--primary-accent)); border-color: transparent; }
+        input:checked + .slider:before { transform: translateX(24px); background-color: #000; }
+
+        .dashboard-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 2rem; }
+        
+        .card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px; padding: 1.5rem; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+        .card-header { font-size: 1.2rem; font-weight: 600; margin-bottom: 1.5rem; color: #fff; }
+        
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 1rem; text-align: left; border-bottom: 1px solid var(--card-border); }
+        th { color: var(--text-muted); font-size: 0.9rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+        td { color: var(--text-main); font-size: 0.95rem; }
+        tr:hover { background-color: rgba(255,255,255,0.02); }
+        
+        .status-badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600; }
+        .status-active { background-color: rgba(16, 185, 129, 0.1); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.2); }
+        .status-offline { background-color: rgba(239, 68, 68, 0.1); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.2); }
+        
+        .empty-state { text-align: center; padding: 4rem 2rem; color: var(--text-muted); }
+        .empty-state h3 { color: var(--text-main); margin-bottom: 0.5rem; }
+        .empty-icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; }
+
+        .chart-container { position: relative; height: 300px; width: 100%; }
+        
+        @media (max-width: 900px) {
+            .dashboard-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo-text">⚡ Urja API Hub</div>
+        <div class="nav-links">
+            <a href="/docs">Swagger Docs</a>
+            <a href="/openapi.json">OpenAPI Spec</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="header-actions">
+            <div>
+                <h2>Smart Meter Intelligence</h2>
+                <p style="color: var(--text-muted); margin-top: 0.5rem;">Real-time network diagnostics and consumption telemetry.</p>
+            </div>
+            <div class="toggle-wrapper">
+                <span class="toggle-label" id="modeLabel">Live API Mode (Real Data)</span>
+                <label class="switch">
+                    <input type="checkbox" id="demoToggle">
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="card">
+                <div class="card-header">Deployed Meters Inventory</div>
+                <div id="table-container">
+                    <!-- Table rendered via JS -->
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">Consumption Anomaly Detection</div>
+                <div class="chart-container">
+                    <canvas id="consumptionChart"></canvas>
+                </div>
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 1rem; text-align: center;">
+                    Select a meter from the inventory to view consumption metrics.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let consumptionChart = null;
+
+        const dummyData = [
+            { id: "M-10492", serial: "SN-998274", make: "FlockTech", phase: "3 Phase", status: "Active" },
+            { id: "M-10493", serial: "SN-998275", make: "FlockTech", phase: "Single Phase", status: "Active" },
+            { id: "M-10511", serial: "SN-332110", make: "LegacyCorp", phase: "3 Phase", status: "Offline" },
+            { id: "M-10588", serial: "SN-776492", make: "FlockTech", phase: "3 Phase", status: "Active" },
+        ];
+
+        function initChart() {
+            const ctx = document.getElementById('consumptionChart').getContext('2d');
+            consumptionChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'kWh',
+                        data: [],
+                        borderColor: '#00f2fe',
+                        backgroundColor: 'rgba(0, 242, 254, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: true,
+                        pointBackgroundColor: '#00f2fe'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } },
+                        x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+                    }
+                }
+            });
+        }
+
+        function updateChart(isDemo) {
+            if (!consumptionChart) return;
+            if (isDemo) {
+                consumptionChart.data.labels = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'];
+                consumptionChart.data.datasets[0].data = [12, 10, 35, 42, 28, 48, 15];
+            } else {
+                consumptionChart.data.labels = [];
+                consumptionChart.data.datasets[0].data = [];
+            }
+            consumptionChart.update();
+        }
+
+        function renderTable(data) {
+            const container = document.getElementById('table-container');
+            if (!data || data.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">📭</div>
+                        <h3>No Meters Found</h3>
+                        <p>The authenticated account has no hardware assigned.</p>
+                        <p style="margin-top: 1rem; color: var(--primary-accent); font-size: 0.9rem;">
+                            Turn on <strong>Demo Mode</strong> above to visualize UI capabilities!
+                        </p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Meter ID</th>
+                            <th>Serial</th>
+                            <th>Phase</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            data.forEach(m => {
+                const badgeClass = m.status === 'Active' ? 'status-active' : 'status-offline';
+                html += `
+                    <tr>
+                        <td><strong>${m.id}</strong></td>
+                        <td>${m.serial}</td>
+                        <td>${m.phase}</td>
+                        <td><span class="status-badge ${badgeClass}">${m.status}</span></td>
+                    </tr>
+                `;
+            });
+            
+            html += `</tbody></table>`;
+            container.innerHTML = html;
+        }
+
+        async function fetchRealData() {
+            try {
+                const res = await fetch('/api/v1/meters');
+                if (res.ok) {
+                    const data = await res.json();
+                    renderTable(data);
+                } else {
+                    renderTable([]);
+                }
+            } catch (err) {
+                renderTable([]);
+            }
+        }
+
+        document.getElementById('demoToggle').addEventListener('change', (e) => {
+            const isDemo = e.target.checked;
+            document.getElementById('modeLabel').innerHTML = isDemo 
+                ? '<span style="color: var(--primary-accent)">Demo Mode (Simulated Data)</span>' 
+                : 'Live API Mode (Real Data)';
+            
+            if (isDemo) {
+                renderTable(dummyData);
+                updateChart(true);
+            } else {
+                fetchRealData();
+                updateChart(false);
+            }
+        });
+
+        // Initialize
+        initChart();
+        fetchRealData(); // Load real data by default (which will show empty state)
+    </script>
+</body>
+</html>

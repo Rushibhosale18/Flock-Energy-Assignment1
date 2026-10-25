@@ -9,7 +9,7 @@
 [![Express Version](https://img.shields.io/badge/express-v5.2.1-lightgrey?style=flat-square)](https://expressjs.com)
 [![OpenAPI Specification](https://img.shields.io/badge/OpenAPI-3.0.0-green?style=flat-square)](./openapi.json)
 
-An enterprise-grade, resilient, and fully documented REST API wrapper service engineered around the legacy **Urja Meter Ops** portal (`https://urja-ops.flockenergy.tech`).
+An enterprise-grade, resilient, and fully documented REST API wrapper service engineered around the legacy **Urja Meter Ops** portal (https://urja-ops.flockenergy.tech).
 
 > **🌐 Live Production Deployment**: The service is actively deployed and accessible at **`https://flock-energy-assignment1-1.onrender.com`** with interactive Swagger documentation at **[`https://flock-energy-assignment1-1.onrender.com/docs`](https://flock-energy-assignment1-1.onrender.com/docs)**.
 

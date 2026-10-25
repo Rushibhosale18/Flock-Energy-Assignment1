@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { validateMeterParams, validatePaginationParams } = require('../middleware/security');
 
 /**
  * @param {import('../services/urja-client')} portalClient
@@ -10,7 +11,7 @@ module.exports = function createMetersRouter(portalClient) {
      * /api/v1/meters:
      *   get:
      *     summary: Retrieve smart meters inventory with search and pagination
-     *     description: Fetches live meter records from the Urja portal with normalized field types and search filtering.
+     *     description: Fetches live meter records from the Urja portal with normalized field types, search filtering, and Stale-While-Revalidate caching.
      *     tags: [Meters]
      *     parameters:
      *       - in: query
@@ -29,7 +30,7 @@ module.exports = function createMetersRouter(portalClient) {
      *         schema:
      *           type: integer
      *           default: 20
-     *         description: Items per page
+     *         description: Items per page (max 200)
      *       - in: query
      *         name: all
      *         schema:
@@ -44,7 +45,7 @@ module.exports = function createMetersRouter(portalClient) {
      *             schema:
      *               $ref: '#/components/schemas/MeterListResponse'
      */
-    router.get('/', async (req, res, next) => {
+    router.get('/', validatePaginationParams, async (req, res, next) => {
         try {
             const q = req.query.q || '';
             const page = parseInt(req.query.page, 10) || 1;
@@ -53,7 +54,7 @@ module.exports = function createMetersRouter(portalClient) {
 
             const result = await portalClient.getMeters({ q, page, pageSize, all });
             
-            // Standard JSON response with metadata
+            res.setHeader('Cache-Control', 'public, max-age=30, stale-while-revalidate=60');
             res.json({
                 total: result.total,
                 page: result.page,
@@ -90,10 +91,11 @@ module.exports = function createMetersRouter(portalClient) {
      *       404:
      *         description: Meter ID not found
      */
-    router.get('/:id', async (req, res, next) => {
+    router.get('/:id', validateMeterParams, async (req, res, next) => {
         try {
             const meterId = req.params.id;
             const details = await portalClient.getMeterDetails(meterId);
+            res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=120');
             res.json(details);
         } catch (err) {
             next(err);
@@ -124,10 +126,11 @@ module.exports = function createMetersRouter(portalClient) {
      *       404:
      *         description: Meter not found
      */
-    router.get('/:id/consumption', async (req, res, next) => {
+    router.get('/:id/consumption', validateMeterParams, async (req, res, next) => {
         try {
             const meterId = req.params.id;
             const history = await portalClient.getMeterConsumption(meterId);
+            res.setHeader('Cache-Control', 'public, max-age=45, stale-while-revalidate=90');
             res.json(history);
         } catch (err) {
             next(err);

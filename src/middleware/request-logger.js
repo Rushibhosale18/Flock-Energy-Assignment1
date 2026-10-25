@@ -1,7 +1,9 @@
 const crypto = require('crypto');
+const metrics = require('../utils/metrics');
 
 /**
  * Request tracking and structured latency logger middleware.
+ * Generates unique Request IDs and feeds Prometheus telemetry.
  */
 function requestLogger(req, res, next) {
     const requestId = req.headers['x-request-id'] || crypto.randomUUID();
@@ -12,8 +14,11 @@ function requestLogger(req, res, next) {
 
     res.on('finish', () => {
         const diff = process.hrtime(startTime);
-        const durationMs = (diff[0] * 1e3 + diff[1] * 1e-6).toFixed(2);
+        const durationMs = parseFloat((diff[0] * 1e3 + diff[1] * 1e-6).toFixed(2));
         const status = res.statusCode;
+
+        metrics.recordHttpRequest(req.method, req.route?.path || req.baseUrl + req.path, status, durationMs);
+
         const color = status >= 500 ? '\x1b[31m' : status >= 400 ? '\x1b[33m' : '\x1b[32m';
         const reset = '\x1b[0m';
 

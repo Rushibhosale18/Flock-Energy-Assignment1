@@ -500,7 +500,7 @@
     "/api/v1/meters": {
       "get": {
         "summary": "Retrieve smart meters inventory with search and pagination",
-        "description": "Fetches live meter records from the Urja portal with normalized field types and search filtering.",
+        "description": "Fetches live meter records from the Urja portal with normalized field types, search filtering, and Stale-While-Revalidate caching.",
         "tags": [
           "Meters"
         ],
@@ -529,7 +529,7 @@
               "type": "integer",
               "default": 20
             },
-            "description": "Items per page"
+            "description": "Items per page (max 200)"
           },
           {
             "in": "query",

@@ -5,6 +5,8 @@ const { wrapper } = require('axios-cookiejar-support');
 const { CookieJar } = require('tough-cookie');
 const crypto = require('crypto');
 const config = require('../config');
+const MemoryCache = require('../utils/cache');
+const metrics = require('../utils/metrics');
 const {
     AuthenticationError,
     ForbiddenError,
@@ -63,6 +65,13 @@ class UrjaPortalClient {
         this.authenticated = false;
         this.lastAuthTime = null;
         this.authLock = null;
+
+        // In-Memory Stale-While-Revalidate Cache
+        this.cache = new MemoryCache({
+            defaultTtlMs: 45000, // 45 seconds fresh
+            staleTtlMs: 90000,   // up to 90 seconds stale while revalidating
+            maxItems: 1000
+        });
     }
 
     /**
@@ -71,7 +80,6 @@ class UrjaPortalClient {
      * @returns {Promise<boolean>}
      */
     async login(force = false) {
-        // Return existing session if still within valid TTL margin
         if (!force && this.authenticated && this.lastAuthTime) {
             const ageSeconds = (Date.now() - this.lastAuthTime) / 1000;
             if (ageSeconds < (config.portal.sessionTtlSec - config.portal.sessionRefreshMarginSec)) {
@@ -79,12 +87,12 @@ class UrjaPortalClient {
             }
         }
 
-        // Mutex to serialize concurrent login attempts
         if (this.authLock) {
             return this.authLock;
         }
 
         this.authLock = (async () => {
+            const start = Date.now();
             try {
                 console.log(`[UrjaClient] Initiating portal authentication for ${this.email}...`);
                 const formParams = new URLSearchParams();
@@ -99,6 +107,8 @@ class UrjaPortalClient {
                     }
                 });
 
+                metrics.recordUpstreamRequest('/login', response.status, Date.now() - start);
+
                 if (response.status === 200 || response.status === 302 || response.status === 303) {
                     this.authenticated = true;
                     this.lastAuthTime = Date.now();
@@ -109,6 +119,9 @@ class UrjaPortalClient {
                 throw new AuthenticationError(`Unexpected status ${response.status} during authentication`);
             } catch (err) {
                 this.authenticated = false;
+                const status = err.response?.status || 500;
+                metrics.recordUpstreamRequest('/login', status, Date.now() - start);
+
                 if (err.response?.status === 403) {
                     throw new ForbiddenError('Upstream portal rejected credentials or CSRF Origin verification failed.');
                 }
@@ -129,10 +142,16 @@ class UrjaPortalClient {
      */
     async request(config) {
         await this.login();
+        const start = Date.now();
+        const endpoint = config.url.split('?')[0];
+
         try {
-            return await this.client(config);
+            const res = await this.client(config);
+            metrics.recordUpstreamRequest(endpoint, res.status, Date.now() - start);
+            return res;
         } catch (err) {
-            // Auto-heal expired session
+            metrics.recordUpstreamRequest(endpoint, err.response?.status || 500, Date.now() - start);
+
             if (err.response && (err.response.status === 401 || err.response.status === 403)) {
                 console.warn(`[UrjaClient] Received HTTP ${err.response.status}. Session invalidated. Re-authenticating...`);
                 this.authenticated = false;
@@ -151,22 +170,33 @@ class UrjaPortalClient {
 
     /**
      * Queries smart meters with pagination and optional search filter.
-     * @param {Object} [params]
-     * @param {string} [params.q='']
-     * @param {number} [params.page=1]
-     * @param {number} [params.pageSize=20]
-     * @param {boolean} [params.all=false]
+     * Caches query results using Stale-While-Revalidate.
      */
-    async getMeters({ q = '', page = 1, pageSize = 20, all = false } = {}) {
+    async getMeters({ q = '', page = 1, pageSize = 20, all = false, bypassCache = false } = {}) {
+        const cacheKey = `meters:q=${q}:p=${page}:s=${pageSize}:all=${all}`;
+        if (!bypassCache) {
+            const cached = this.cache.get(cacheKey);
+            if (cached) {
+                // If stale, trigger background refresh
+                if (cached.isStale) {
+                    this.getMeters({ q, page, pageSize, all, bypassCache: true })
+                        .catch(err => console.warn('[Cache] Background SWR refresh failed:', err.message));
+                }
+                return cached.data;
+            }
+        }
+
         if (all) {
-            const allExported = await this.getExportAll();
-            return {
+            const allExported = await this.getExportAll({ bypassCache });
+            const result = {
                 total: allExported.length,
                 page: 1,
                 page_size: allExported.length,
                 total_pages: 1,
                 data: allExported.map(m => this.normalizeMeter(m))
             };
+            this.cache.set(cacheKey, result, 60000);
+            return result;
         }
 
         const res = await this.request({
@@ -179,13 +209,16 @@ class UrjaPortalClient {
         const total = raw.total !== undefined ? raw.total : items.length;
         const pSize = raw.pageSize || pageSize;
 
-        return {
+        const result = {
             total: total,
             page: raw.page || page,
             page_size: pSize,
             total_pages: Math.max(1, Math.ceil(total / pSize)),
             data: items
         };
+
+        this.cache.set(cacheKey, result, 45000);
+        return result;
     }
 
     /**
@@ -193,10 +226,21 @@ class UrjaPortalClient {
      * - Scrapes SSR Nameplate (<dl>) and Hierarchy breadcrumb (<nav>) via Cheerio
      * - Queries internal geo-location coordinates (/portal/meters/{id}/geo)
      * - Inspects SvelteKit hydration payload
-     * @param {string} meterId
      */
-    async getMeterDetails(meterId) {
+    async getMeterDetails(meterId, bypassCache = false) {
         if (!meterId) throw new NotFoundError('Meter', 'undefined');
+
+        const cacheKey = `meter:detail:${meterId}`;
+        if (!bypassCache) {
+            const cached = this.cache.get(cacheKey);
+            if (cached) {
+                if (cached.isStale) {
+                    this.getMeterDetails(meterId, true)
+                        .catch(err => console.warn('[Cache] Background SWR detail refresh failed:', err.message));
+                }
+                return cached.data;
+            }
+        }
 
         const [htmlRes, geoRes] = await Promise.allSettled([
             this.request({ method: 'GET', url: `/meters/${meterId}` }),
@@ -233,7 +277,6 @@ class UrjaPortalClient {
         if (htmlData) {
             const $ = cheerio.load(htmlData);
 
-            // Parse Nameplate <dl>
             $('dl div').each((_, el) => {
                 const label = $(el).find('dt').text().trim();
                 const value = $(el).find('dd').text().trim();
@@ -248,7 +291,6 @@ class UrjaPortalClient {
                 }
             });
 
-            // Parse Breadcrumbs
             const breadcrumbParts = [];
             $('nav.text-xs span, nav.flex-wrap span').each((_, span) => {
                 const text = $(span).text().trim();
@@ -266,7 +308,6 @@ class UrjaPortalClient {
                 });
             }
 
-            // Fallback: SvelteKit hydration payload regex parse
             try {
                 const scriptMatch = htmlData.match(/hierarchy:\s*(\{.*?\})/);
                 if (scriptMatch) {
@@ -281,27 +322,35 @@ class UrjaPortalClient {
                         if (parsed.DT && !details.hierarchy.dt) details.hierarchy.dt = parsed.DT;
                     }
                 }
-            } catch (e) {
-                // Ignore parse quirks
-            }
+            } catch (e) {}
         }
 
-        // Extract DT code if present in DT string e.g. "Malviya Nagar DT 1 (DT-001)"
         if (details.hierarchy.dt) {
             const dtMatch = details.hierarchy.dt.match(/\((DT-\d+)\)/);
             if (dtMatch) details.dt_code = dtMatch[1];
         }
 
+        this.cache.set(cacheKey, details, 90000);
         return details;
     }
 
     /**
      * Retrieves normalized 30-minute interval telemetry records and summary stats.
-     * Converts numeric strings to floats and Indian timestamps to ISO 8601.
-     * @param {string} meterId
      */
-    async getMeterConsumption(meterId) {
+    async getMeterConsumption(meterId, bypassCache = false) {
         if (!meterId) throw new NotFoundError('Meter', 'undefined');
+
+        const cacheKey = `meter:consumption:${meterId}`;
+        if (!bypassCache) {
+            const cached = this.cache.get(cacheKey);
+            if (cached) {
+                if (cached.isStale) {
+                    this.getMeterConsumption(meterId, true)
+                        .catch(err => console.warn('[Cache] Background SWR consumption refresh failed:', err.message));
+                }
+                return cached.data;
+            }
+        }
 
         const res = await this.request({
             method: 'GET',
@@ -353,7 +402,7 @@ class UrjaPortalClient {
         const firstReading = readings[0] || null;
         const lastReading = readings[readings.length - 1] || null;
 
-        return {
+        const result = {
             meter_id: meterId,
             total_readings: readings.length,
             time_window: {
@@ -368,14 +417,21 @@ class UrjaPortalClient {
             },
             readings: readings
         };
+
+        this.cache.set(cacheKey, result, 60000);
+        return result;
     }
 
     /**
      * Retrieves distribution transformers with pagination.
-     * @param {Object} [params]
-     * @param {number} [params.page=1]
      */
-    async getTransformers({ page = 1 } = {}) {
+    async getTransformers({ page = 1, bypassCache = false } = {}) {
+        const cacheKey = `transformers:p=${page}`;
+        if (!bypassCache) {
+            const cached = this.cache.get(cacheKey);
+            if (cached) return cached.data;
+        }
+
         const res = await this.request({
             method: 'GET',
             url: `/portal/dts?page=${page}`
@@ -392,19 +448,28 @@ class UrjaPortalClient {
         const total = raw.total || items.length;
         const pageSize = raw.pageSize || 20;
 
-        return {
+        const result = {
             total: total,
             page: raw.page || page,
             page_size: pageSize,
             total_pages: Math.max(1, Math.ceil(total / pageSize)),
             data: items
         };
+
+        this.cache.set(cacheKey, result, 120000);
+        return result;
     }
 
     /**
      * Executes HMAC-SHA256 signed request against /portal/export to retrieve all 403 meters.
      */
-    async getExportAll() {
+    async getExportAll({ bypassCache = false } = {}) {
+        const cacheKey = 'grid:export:all';
+        if (!bypassCache) {
+            const cached = this.cache.get(cacheKey);
+            if (cached) return cached.data;
+        }
+
         const keyRes = await this.request({ method: 'GET', url: '/portal/keys' });
         const secret = keyRes.data?.data?.signingSecret;
         if (!secret) throw new UpstreamGatewayError('Unable to extract cryptographic signing secret from /portal/keys');
@@ -425,16 +490,24 @@ class UrjaPortalClient {
             }
         });
 
-        return expRes.data?.data || [];
+        const data = expRes.data?.data || [];
+        this.cache.set(cacheKey, data, 180000);
+        return data;
     }
 
     /**
      * Builds structured grid tree: Zone -> Circle -> Division -> Subdivision -> Substation -> Feeder -> DT -> Meters
      */
-    async getHierarchy() {
+    async getHierarchy({ bypassCache = false } = {}) {
+        const cacheKey = 'grid:hierarchy:tree';
+        if (!bypassCache) {
+            const cached = this.cache.get(cacheKey);
+            if (cached) return cached.data;
+        }
+
         const [allMeters, dtsRes] = await Promise.all([
-            this.getExportAll(),
-            this.getTransformers({ page: 1 })
+            this.getExportAll({ bypassCache }),
+            this.getTransformers({ page: 1, bypassCache })
         ]);
         const allDts = dtsRes.data || [];
 
@@ -501,8 +574,7 @@ class UrjaPortalClient {
             });
         });
 
-        // Convert dictionary maps to nested arrays
-        return Object.values(tree).map(z => ({
+        const result = Object.values(tree).map(z => ({
             code: z.code,
             name: z.name,
             circles: Object.values(z.circles).map(c => ({
@@ -527,6 +599,9 @@ class UrjaPortalClient {
                 }))
             }))
         }));
+
+        this.cache.set(cacheKey, result, 180000);
+        return result;
     }
 
     /**
@@ -541,7 +616,8 @@ class UrjaPortalClient {
             upstream_portal: this.baseUrl,
             latency_ms: latencyMs,
             authenticated: this.authenticated,
-            session_age_seconds: this.lastAuthTime ? Math.floor((Date.now() - this.lastAuthTime) / 1000) : null
+            session_age_seconds: this.lastAuthTime ? Math.floor((Date.now() - this.lastAuthTime) / 1000) : null,
+            cache: this.cache.getStats()
         };
     }
 

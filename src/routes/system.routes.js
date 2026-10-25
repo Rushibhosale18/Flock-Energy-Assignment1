@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const config = require('../config');
+const metrics = require('../utils/metrics');
 
 /**
  * @param {import('../services/urja-client')} portalClient
@@ -26,6 +27,8 @@ module.exports = function createSystemRouter(portalClient, swaggerSpec) {
                 environment: config.env,
                 service: 'flock-energy-api',
                 version: '1.0.0',
+                uptime_seconds: Math.floor(process.uptime()),
+                memory_usage: process.memoryUsage(),
                 upstream: health
             });
         } catch (err) {
@@ -39,6 +42,15 @@ module.exports = function createSystemRouter(portalClient, swaggerSpec) {
                 }
             });
         }
+    });
+
+    /**
+     * Prometheus / OpenMetrics scraping endpoint
+     */
+    router.get('/metrics', (req, res) => {
+        res.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+        const cacheStats = portalClient.cache ? portalClient.cache.getStats() : {};
+        res.send(metrics.toPrometheusFormat(cacheStats));
     });
 
     /**

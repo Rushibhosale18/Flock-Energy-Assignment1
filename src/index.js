@@ -4,8 +4,10 @@ const swaggerUi = require('swagger-ui-express');
 const config = require('./config');
 const requestLogger = require('./middleware/request-logger');
 const errorHandler = require('./middleware/error-handler');
+const { securityHeaders, corsMiddleware, rateLimiter } = require('./middleware/security');
 const UrjaPortalClient = require('./services/urja-client');
 const swaggerSpec = require('./docs/swagger');
+const metrics = require('./utils/metrics');
 
 // Route Factories
 const createAuthRouter = require('./routes/auth.routes');
@@ -15,9 +17,14 @@ const createSystemRouter = require('./routes/system.routes');
 
 const app = express();
 
-// Standard Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Security Hardening Middleware (Helmet equivalent, CORS, Rate Limiting)
+app.use(securityHeaders);
+app.use(corsMiddleware);
+app.use(rateLimiter);
+
+// Parsing & Telemetry Middleware
+app.use(express.json({ limit: '100kb' }));
+app.use(express.urlencoded({ extended: true, limit: '100kb' }));
 app.use(requestLogger);
 
 // Initialize Upstream Portal Client
@@ -26,6 +33,13 @@ const portalClient = new UrjaPortalClient({
     email: config.portal.email,
     password: config.portal.password,
     timeout: config.portal.timeoutMs
+});
+
+// Prometheus / OpenMetrics Scraping Route
+app.get('/metrics', (req, res) => {
+    res.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+    const cacheStats = portalClient.cache ? portalClient.cache.getStats() : {};
+    res.send(metrics.toPrometheusFormat(cacheStats));
 });
 
 // Serve Interactive Swagger UI
@@ -74,11 +88,12 @@ app.use(errorHandler);
 if (require.main === module) {
     const server = app.listen(config.port, () => {
         console.log(`\n=============================================================`);
-        console.log(`⚡ FLOCK ENERGY - URJA METER OPS REST API SERVICE`);
+        console.log(`⚡ FLOCK ENERGY - URJA METER OPS REST API SERVICE (PROD-READY)`);
         console.log(`-------------------------------------------------------------`);
         console.log(`- Service URL:         http://localhost:${config.port}`);
         console.log(`- Swagger UI Docs:     http://localhost:${config.port}/docs`);
         console.log(`- OpenAPI Schema:      http://localhost:${config.port}/openapi.json`);
+        console.log(`- Prometheus Metrics:  http://localhost:${config.port}/metrics`);
         console.log(`- Health Check:        http://localhost:${config.port}/api/v1/health`);
         console.log(`- Web Dashboard:       http://localhost:${config.port}/`);
         console.log(`=============================================================\n`);

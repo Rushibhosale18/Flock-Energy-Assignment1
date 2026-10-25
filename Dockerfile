@@ -7,7 +7,7 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 
 # Copy application source
-COPY . .
+COPY --chown=node:node . .
 
 # Environment defaults
 ENV NODE_ENV=production \

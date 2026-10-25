@@ -1,6 +1,7 @@
 # Flock Energy — Urja Meter Ops REST API Wrapper
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Rushibhosale18/Flock-Energy-Assignment1)
+[![Live Service on Render](https://img.shields.io/badge/Render-Live%20Production-success?style=for-the-badge&logo=render)](https://flock-energy-assignment1-1.onrender.com)
+[![Swagger Docs](https://img.shields.io/badge/Swagger%20UI-Live%20Docs-blue?style=for-the-badge&logo=swagger)](https://flock-energy-assignment1-1.onrender.com/docs)
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen?style=flat-square)](https://github.com/Rushibhosale18/Flock-Energy-Assignment1)
 [![Tests Passing](https://img.shields.io/badge/tests-26%2F26%20passing-success?style=flat-square)](https://github.com/Rushibhosale18/Flock-Energy-Assignment1)
@@ -10,7 +11,7 @@
 
 An enterprise-grade, resilient, and fully documented REST API wrapper service engineered around the legacy **Urja Meter Ops** portal (`https://urja-ops.flockenergy.tech`).
 
-This service automates authentication against SvelteKit session endpoints, manages CSRF constraints, queries internal grid telemetry APIs, scrapes SSR Nameplate specifications via Cheerio, normalizes inconsistent data types into clean JSON, and exposes OpenAPI 3.0 documented REST endpoints for downstream microservices.
+> **🌐 Live Production Deployment**: The service is actively deployed and accessible at **`https://flock-energy-assignment1-1.onrender.com`** with interactive Swagger documentation at **[`https://flock-energy-assignment1-1.onrender.com/docs`](https://flock-energy-assignment1-1.onrender.com/docs)**.
 
 ---
 
@@ -18,11 +19,11 @@ This service automates authentication against SvelteKit session endpoints, manag
 
 | Deliverable | Location | Description |
 | :--- | :--- | :--- |
+| **Live Swagger Docs** | [flock-energy-assignment1-1.onrender.com/docs](https://flock-energy-assignment1-1.onrender.com/docs) | Interactive Swagger UI documentation with live testing on cloud deployment. |
+| **Live Web Dashboard** | [flock-energy-assignment1-1.onrender.com](https://flock-energy-assignment1-1.onrender.com) | Real-time web dashboard showcasing live smart meter telemetry and grid status. |
 | **Protocol Discovery** | [`PROTOCOL.md`](./PROTOCOL.md) | Exhaustive reverse-engineering documentation of portal behaviors, CSRF, internal APIs, and HMAC security. |
 | **OpenAPI Specification** | [`openapi.json`](./openapi.json) | Exported OpenAPI 3.0 schema representing all endpoints, request params, and schemas. |
 | **Engineering Reflection** | [`REFLECTION.md`](./REFLECTION.md) | In-depth answers to all 5 required reflection questions (assumptions, challenges, mistakes, self-critique). |
-| **Interactive Docs** | `http://localhost:3001/docs` | Swagger UI documentation with interactive testing. |
-| **Telemetry Dashboard** | `http://localhost:3001/` | Web dashboard showcasing live meters, diagnostics, and consumption charts. |
 
 ---
 

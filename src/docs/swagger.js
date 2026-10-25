@@ -230,12 +230,14 @@ const swaggerOptions = {
 
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 
-// Persist openapi.json to repo root
-try {
-    const rootPath = path.join(__dirname, '..', '..', 'openapi.json');
-    fs.writeFileSync(rootPath, JSON.stringify(swaggerSpec, null, 2), 'utf8');
-} catch (e) {
-    console.warn('[Swagger] Warning writing openapi.json:', e.message);
+// Persist openapi.json to repo root in development mode
+if (process.env.NODE_ENV !== 'production') {
+    try {
+        const rootPath = path.join(__dirname, '..', '..', 'openapi.json');
+        fs.writeFileSync(rootPath, JSON.stringify(swaggerSpec, null, 2), 'utf8');
+    } catch (e) {
+        // Safe fallback in restricted environments
+    }
 }
 
 module.exports = swaggerSpec;

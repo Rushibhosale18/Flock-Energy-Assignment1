@@ -1,11 +1,12 @@
 # Flock Energy — Urja Meter Ops REST API Wrapper
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Rushibhosale18/Flock-Energy-Assignment1)
+
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen?style=flat-square)](https://github.com/Rushibhosale18/Flock-Energy-Assignment1)
 [![Tests Passing](https://img.shields.io/badge/tests-26%2F26%20passing-success?style=flat-square)](https://github.com/Rushibhosale18/Flock-Energy-Assignment1)
 [![Node Version](https://img.shields.io/badge/node-%3E%3D18.0.0-blue?style=flat-square)](https://nodejs.org)
 [![Express Version](https://img.shields.io/badge/express-v5.2.1-lightgrey?style=flat-square)](https://expressjs.com)
 [![OpenAPI Specification](https://img.shields.io/badge/OpenAPI-3.0.0-green?style=flat-square)](./openapi.json)
-[![Deploy on Render](https://img.shields.io/badge/Deploy%20to-Render-46E3B7?style=flat-square&logo=render&logoColor=white)](https://render.com)
 
 An enterprise-grade, resilient, and fully documented REST API wrapper service engineered around the legacy **Urja Meter Ops** portal (`https://urja-ops.flockenergy.tech`).
 

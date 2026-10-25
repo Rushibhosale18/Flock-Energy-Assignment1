@@ -3,15 +3,20 @@
   "info": {
     "title": "Flock Energy - Urja Meter Ops API",
     "version": "1.0.0",
-    "description": "Clean, modern, and documented REST API wrapper over the legacy Urja Meter Ops web portal. Automates SvelteKit session management, handles CSRF protection, queries internal telemetry APIs, parses SSR Nameplate HTML, and normalizes smart meter data structures.",
+    "description": "\n## Enterprise REST API Wrapper for Urja Meter Ops\nThis service automates authentication against SvelteKit session endpoints, manages CSRF constraints, queries internal grid telemetry APIs, scrapes SSR Nameplate specifications via Cheerio, normalizes inconsistent data types into clean JSON, and exposes documented REST endpoints for downstream clients.\n\n### Key Capabilities\n- **Automated Session Lifecycle**: Automatic session establishment, 3600s TTL tracking, and auto-healing on HTTP 401/403.\n- **Dual-Stack DNS Resilience**: Fallback resolution for NAT64/IPv6 networks.\n- **Full Inventory Telemetry**: Real-time paginated access to all 403 smart meters across Jaipur's electrical grid.\n- **Clean Time-Series Coercion**: 30-minute interval readings normalized from string floats into native IEEE 754 numbers and ISO 8601 timestamps.\n- **Grid Network Topology**: Hierarchical aggregation of Zones, Circles, Divisions, Subdivisions, Substations, Feeders, and Distribution Transformers (DTs).\n        ",
     "contact": {
-      "name": "Flock Energy Engineering"
+      "name": "Flock Energy Platform Engineering",
+      "email": "engineering@flockenergy.tech"
+    },
+    "license": {
+      "name": "Proprietary",
+      "url": "https://flockenergy.tech"
     }
   },
   "servers": [
     {
       "url": "http://localhost:3001",
-      "description": "Local API server"
+      "description": "Local Gateway"
     }
   ],
   "tags": [
@@ -50,17 +55,43 @@
       "LoginResponse": {
         "type": "object",
         "properties": {
-          "status": {
-            "type": "string",
-            "example": "authenticated"
+          "success": {
+            "type": "boolean",
+            "example": true
           },
-          "authenticated_at": {
-            "type": "string",
-            "format": "date-time"
+          "data": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "example": "authenticated"
+              },
+              "authenticated_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "operator": {
+                "type": "string",
+                "example": "operator@urja.local"
+              },
+              "session_expires_in_seconds": {
+                "type": "integer",
+                "example": 3600
+              }
+            }
           },
-          "operator": {
-            "type": "string",
-            "example": "operator@urja.local"
+          "meta": {
+            "type": "object",
+            "properties": {
+              "request_id": {
+                "type": "string",
+                "example": "c52d43e1-7e82-411a-bf41-6c4b6e5e9b88"
+              },
+              "timestamp": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
           }
         }
       },
@@ -355,13 +386,39 @@
       "ErrorResponse": {
         "type": "object",
         "properties": {
-          "error": {
-            "type": "string",
-            "example": "Meter not found or upstream error"
+          "success": {
+            "type": "boolean",
+            "example": false
           },
-          "status_code": {
-            "type": "integer",
-            "example": 500
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "NOT_FOUND"
+              },
+              "message": {
+                "type": "string",
+                "example": "Meter J999999 was not found."
+              },
+              "details": {
+                "type": "object",
+                "nullable": true
+              }
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "request_id": {
+                "type": "string",
+                "example": "123e4567-e89b-12d3-a456-426614174000"
+              },
+              "timestamp": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
           }
         }
       }
@@ -370,7 +427,7 @@
   "paths": {
     "/api/v1/health": {
       "get": {
-        "summary": "System health check and portal connectivity status",
+        "summary": "Comprehensive system health and upstream connectivity check",
         "tags": [
           "System"
         ],
@@ -381,39 +438,30 @@
         }
       }
     },
-    "/api/v1/auth/login": {
-      "post": {
-        "summary": "Trigger authentication or re-authentication against the Urja portal",
+    "/api/v1/transformers": {
+      "get": {
+        "summary": "Retrieve distribution transformers in the grid",
         "tags": [
-          "Authentication"
+          "Network Topology"
         ],
-        "requestBody": {
-          "required": false,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LoginRequest"
-              }
-            }
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            },
+            "description": "Page number"
           }
-        },
+        ],
         "responses": {
           "200": {
-            "description": "Authentication successful",
+            "description": "List of distribution transformers",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LoginResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Authentication failure",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/TransformerListResponse"
                 }
               }
             }
@@ -421,9 +469,38 @@
         }
       }
     },
+    "/api/v1/hierarchy": {
+      "get": {
+        "summary": "Retrieve organized network hierarchy tree from Zone down to connected meters",
+        "description": "Assembles the 7-tier electrical distribution network tree from live inventory and topology models.",
+        "tags": [
+          "Network Topology"
+        ],
+        "responses": {
+          "200": {
+            "description": "Full electrical grid hierarchy tree"
+          }
+        }
+      }
+    },
+    "/api/v1/export": {
+      "get": {
+        "summary": "Bulk export all 403 meters via HMAC-SHA256 signed request",
+        "description": "Utilizes the portal's cryptographic key derivation protocol to export complete grid models.",
+        "tags": [
+          "Meters"
+        ],
+        "responses": {
+          "200": {
+            "description": "Complete inventory of all meters with full topology and GPS coordinates"
+          }
+        }
+      }
+    },
     "/api/v1/meters": {
       "get": {
-        "summary": "Retrieve a list of smart meters with search and pagination",
+        "summary": "Retrieve smart meters inventory with search and pagination",
+        "description": "Fetches live meter records from the Urja portal with normalized field types and search filtering.",
         "tags": [
           "Meters"
         ],
@@ -461,26 +538,16 @@
               "type": "boolean",
               "default": false
             },
-            "description": "If true, returns all 403 meters at once via signed export"
+            "description": "If true, returns all 403 meters at once via bulk signed export"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successfully retrieved meters list",
+            "description": "Paginated meters inventory",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MeterListResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -490,7 +557,8 @@
     },
     "/api/v1/meters/{id}": {
       "get": {
-        "summary": "Get detailed specifications, hierarchy, and geo coordinates for a specific meter",
+        "summary": "Get detailed specifications, hierarchy, and geo coordinates for a meter",
+        "description": "Scrapes SSR Nameplate specifications, retrieves GPS coordinates from internal geo service, and extracts electrical breadcrumbs.",
         "tags": [
           "Meters"
         ],
@@ -502,12 +570,12 @@
             "schema": {
               "type": "string"
             },
-            "description": "The unique meter identifier (e.g., J100000)"
+            "description": "Meter identifier (e.g., J100000)"
           }
         ],
         "responses": {
           "200": {
-            "description": "Detailed meter diagnostic record",
+            "description": "Detailed meter record",
             "content": {
               "application/json": {
                 "schema": {
@@ -517,24 +585,15 @@
             }
           },
           "404": {
-            "description": "Meter not found"
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "description": "Meter ID not found"
           }
         }
       }
     },
     "/api/v1/meters/{id}/consumption": {
       "get": {
-        "summary": "Retrieve historical energy consumption readings and statistical summary for a meter",
+        "summary": "Retrieve historical energy consumption readings and analytics summary",
+        "description": "Returns clean, chronological 30-minute interval readings with float conversions, ISO 8601 timestamps, and computed statistics.",
         "tags": [
           "Meters"
         ],
@@ -546,12 +605,12 @@
             "schema": {
               "type": "string"
             },
-            "description": "The unique meter identifier (e.g., J100000)"
+            "description": "Meter identifier (e.g., J100000)"
           }
         ],
         "responses": {
           "200": {
-            "description": "Normalized consumption telemetry and analytics summary",
+            "description": "Normalized consumption telemetry records and aggregate stats",
             "content": {
               "application/json": {
                 "schema": {
@@ -560,81 +619,58 @@
               }
             }
           },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+          "404": {
+            "description": "Meter not found"
           }
         }
       }
     },
-    "/api/v1/transformers": {
-      "get": {
-        "summary": "Retrieve distribution transformers in the electrical network",
+    "/api/v1/auth/login": {
+      "post": {
+        "summary": "Authenticate operator session with legacy Urja Ops portal",
+        "description": "Initiates SvelteKit form authentication, validates CSRF origin headers, and establishes a secure session cookie.",
         "tags": [
-          "Network Topology"
+          "Authentication"
         ],
-        "parameters": [
-          {
-            "in": "query",
-            "name": "page",
-            "schema": {
-              "type": "integer",
-              "default": 1
-            },
-            "description": "Page number (1-based)"
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
           }
-        ],
+        },
         "responses": {
           "200": {
-            "description": "List of distribution transformers",
+            "description": "Authentication successful and session cookie cached",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TransformerListResponse"
+                  "$ref": "#/components/schemas/LoginResponse"
                 }
               }
             }
           },
-          "500": {
-            "description": "Server error"
+          "401": {
+            "description": "Invalid operator credentials"
+          },
+          "403": {
+            "description": "CSRF Origin rejection by legacy portal"
           }
         }
       }
     },
-    "/api/v1/hierarchy": {
+    "/api/v1/auth/status": {
       "get": {
-        "summary": "Retrieve organized network hierarchy tree from Zone down to connected smart meters",
+        "summary": "Check current cached session status",
         "tags": [
-          "Network Topology"
+          "Authentication"
         ],
         "responses": {
           "200": {
-            "description": "Full electrical grid hierarchy tree"
-          },
-          "500": {
-            "description": "Server error"
-          }
-        }
-      }
-    },
-    "/api/v1/export": {
-      "get": {
-        "summary": "Retrieve full dataset of all meters via HMAC-SHA256 signed export",
-        "tags": [
-          "Meters"
-        ],
-        "responses": {
-          "200": {
-            "description": "Complete inventory array of all 403 meters with rich topology and coordinates"
-          },
-          "500": {
-            "description": "Server error"
+            "description": "Current session status"
           }
         }
       }

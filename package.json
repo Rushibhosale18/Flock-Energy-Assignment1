@@ -1,14 +1,22 @@
 {
   "name": "flock-energy-api",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Enterprise REST API wrapper for the legacy Urja Meter Ops web application",
+  "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test tests/*.test.js"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "flock-energy",
+    "urja-meter-ops",
+    "smart-meters",
+    "iot",
+    "telemetry",
+    "rest-api",
+    "openapi"
+  ],
+  "author": "Flock Energy Platform Engineering",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {

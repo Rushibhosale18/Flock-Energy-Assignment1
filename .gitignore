@@ -3,3 +3,8 @@ node_modules/
 .DS_Store
 recon*.js
 recon*.py
+node*.js
+energy.json
+cookies.txt
+meters.html
+venv/

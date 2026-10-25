@@ -1,11 +1,11 @@
 # Flock Energy — Urja Meter Ops REST API Wrapper
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen?style=flat-square)](https://github.com/flock-energy/flock-energy-api)
-[![Tests Passing](https://img.shields.io/badge/tests-22%2F22%20passing-success?style=flat-square)](https://github.com/flock-energy/flock-energy-api)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen?style=flat-square)](https://github.com/Rushibhosale18/Flock-Energy-Assignment1)
+[![Tests Passing](https://img.shields.io/badge/tests-26%2F26%20passing-success?style=flat-square)](https://github.com/Rushibhosale18/Flock-Energy-Assignment1)
 [![Node Version](https://img.shields.io/badge/node-%3E%3D18.0.0-blue?style=flat-square)](https://nodejs.org)
 [![Express Version](https://img.shields.io/badge/express-v5.2.1-lightgrey?style=flat-square)](https://expressjs.com)
-[![OpenAPI Specification](https://img.shields.io/badge/OpenAPI-3.0.0-green?style=flat-square)](http://localhost:3001/openapi.json)
-[![License](https://img.shields.io/badge/license-Proprietary-red?style=flat-square)](#license)
+[![OpenAPI Specification](https://img.shields.io/badge/OpenAPI-3.0.0-green?style=flat-square)](./openapi.json)
+[![Deploy on Render](https://img.shields.io/badge/Deploy%20to-Render-46E3B7?style=flat-square&logo=render&logoColor=white)](https://render.com)
 
 An enterprise-grade, resilient, and fully documented REST API wrapper service engineered around the legacy **Urja Meter Ops** portal (`https://urja-ops.flockenergy.tech`).
 
@@ -442,6 +442,46 @@ A production-ready `Dockerfile` with multi-stage build and non-root execution is
    docker ps
    # STATUS will display "(healthy)" once the /api/v1/health check succeeds
    ```
+
+---
+
+## ☁️ Cloud Deployment Guide (Free Public Hosting)
+
+The repository is configured for zero-configuration, 1-click cloud deployment on **Render.com**, **Railway**, or **Koyeb**.
+
+### Option A: 1-Click / Blueprint on Render.com (Recommended - 100% Free)
+
+1. Sign up / Log in to [Render.com](https://render.com) (free account).
+2. Click **New +** in the top right and select **Web Service**.
+3. Choose **Build and deploy from a Git repository**.
+4. Connect your GitHub account and select repository:
+   ```
+   Rushibhosale18/Flock-Energy-Assignment1
+   ```
+5. Render will automatically detect Node.js or the `render.yaml` blueprint. Fill in or confirm:
+   - **Name**: `flock-energy-api` (or any unique name)
+   - **Runtime**: `Node`
+   - **Build Command**: `npm install`
+   - **Start Command**: `npm start`
+   - **Plan**: `Free`
+6. Under **Environment Variables**, the default portal credentials are already baked into the codebase, but you can explicitly add:
+   - `PORTAL_URL`: `https://urja-ops.flockenergy.tech`
+   - `URJA_EMAIL`: `operator@urja.local`
+   - `URJA_PASSWORD`: `urja-ops-2026`
+   - `NODE_ENV`: `production`
+7. Click **Create Web Service**.
+8. Render will deploy the application within 60 seconds and assign a public URL with free SSL:
+   - **Live Swagger UI**: `https://<your-service-name>.onrender.com/docs`
+   - **Health Check**: `https://<your-service-name>.onrender.com/api/v1/health`
+   - **Live Telemetry Dashboard**: `https://<your-service-name>.onrender.com/`
+
+### Option B: Deploying on Railway.app
+
+1. Go to [Railway.app](https://railway.app).
+2. Click **New Project** → **Deploy from GitHub repo**.
+3. Select `Rushibhosale18/Flock-Energy-Assignment1`.
+4. Railway will automatically pick up `railway.json`, run `npm install`, and launch on a public domain.
+5. In Settings → Networking, click **Generate Domain**.
 
 ---
 

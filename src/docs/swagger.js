@@ -30,8 +30,12 @@ This service automates authentication against SvelteKit session endpoints, manag
     },
     servers: [
         {
+            url: '/',
+            description: 'Current Gateway (Production / Auto-detected)'
+        },
+        {
             url: `http://localhost:${config.port}`,
-            description: 'Local Gateway'
+            description: 'Local Development Server'
         }
     ],
     tags: [

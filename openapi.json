@@ -15,8 +15,12 @@
   },
   "servers": [
     {
+      "url": "/",
+      "description": "Current Gateway (Production / Auto-detected)"
+    },
+    {
       "url": "http://localhost:3001",
-      "description": "Local Gateway"
+      "description": "Local Development Server"
     }
   ],
   "tags": [
